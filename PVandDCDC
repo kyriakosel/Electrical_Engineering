@@ -1,0 +1,126 @@
+
+clear; %Clear Memory and Screen
+clc;
+clear all;
+
+%----PV Variable Declaration------------
+Ai=1.72;
+constantk=1.380658*10^(-23);
+Ior=19.9693*10^(-6);
+np=2;
+ns=40;
+tr=301.18;
+q=1.6*10^(-19);
+eg=1.1;
+Iscr=3.3;
+ki=1.7*10^(-3);
+Rs=5*10^(-5);
+Rp=5*10^5;
+Temperature=25;
+IntensityG=1;
+%------DC-DC Variable Declaration-----
+VI=15;
+Pomax=80;
+Fs=5000;
+Co=333*10^(-6);
+L=4*10^(-3);
+rL=0.2;
+rs=5*10^(-3);
+RL=15;
+CI=200*10^(-6);
+VIpv=5.3;
+k=0.45;
+%---------------------------------------
+%--------------PV formulas--------------
+Temp=Temperature+(0.2*IntensityG)+273.18;
+Isc=(Iscr+ki*(Temp-tr))*IntensityG;
+Is=Ior*(Temp/tr)^3*exp(q*eg*(1/tr-1/Temp)/(constantk*Ai));
+
+%--------Time Variables-----------------
+Tp=1/Fs;
+onTime=k*Tp;
+simulationTime=300*Tp;
+Dt=4*10^(-6);
+ttime=0:Dt:simulationTime;	%Time values with an increment dt
+span=length(ttime);
+
+%------Arrays---------------------
+V=VIpv;%in order for the equation of RK to show simpler
+B=[1/CI;0;0]; %in order for the equation of RK to show simpler
+VVoltagePV=[];VVoltagePV(1)=0;
+VoltageOut=[];VoltageOut(1)=0;
+InductorCurrent=[];InductorCurrent(1)=0;
+Iout=[];Iout(1)=0;
+Voltage=0;
+Ic=3;
+number = 1;
+x=[VVoltagePV(1);InductorCurrent(1);VoltageOut(1)];
+%--------------------------------------------------
+for n=2:span
+    t_instant = mod(ttime, Tp);
+    if t_instant(n)<=onTime
+        Switch=1;
+    else
+        Switch=0;
+    end
+    A=[0 -1/CI 0 ; 1/L -(rL/L) -(1-Switch)/L ; 0 (1-Switch)/Co -1/(RL*Co)];
+ 
+    %-------Runga Kutta Method---------------------
+    k1=Dt*(A*x+B*V);
+    k2=Dt*(A*(x+0.5*k1)+B*V);
+    k3=Dt*(A*(x+0.5*k2)+B*V);
+    k4=Dt*(A*(x+k3)+B*V);
+    x=x+(k1+(2*k2)+(2*k3)+k4)/6;
+    %----------------------------------------------
+    fx=10; %For use with newton raphson
+    dfx=1; 
+    differential=fx/dfx; 
+    VVoltagePV(n)=x(1);    
+    VwithR=(V-x(2))*rs;
+    Voltage=VwithR+VVoltagePV(n);
+    z=0;
+    %--------------Newton Raphson------------------
+    if mod(number,z<10)==0
+        while abs(differential)>0.01 
+            fx=Ic-np*Isc+np*Is*(exp((q*(Voltage/ns+Ic*Rs/np))/(Ai*constantk*Temp)-1))+(Voltage*np/ns+Ic*Rs)/Rp;
+            dfx=1+Rs/Rp+q*Is*Rs/(Ai*constantk*Temp)*exp((q*(Voltage/ns+Ic*Rs/np))/(Ai*constantk*Temp));
+            differential=fx/dfx;
+            Ic=Ic-differential; 
+            z=z+1;
+        end
+    end
+    %----------------------------------------------
+    InductorCurrent(n)=x(2);	
+    VoltageOut(n)=x(3);	
+    Iout=[Iout Ic];
+    V=Ic;
+    number=number+1;
+end
+
+
+%-----------------------Plot Figures----------------
+
+figure(1);
+title('PV Panel Terminal Current');
+subplot(2,1,2);%Plotting two graphs on the same 
+plot(ttime,InductorCurrent);grid on;
+
+figure(1); %Figure 1 with both DCDC Vout and Ipv
+title('DC-DC Boost Converter Output Current');
+subplot(2,1,1); %Plotting two graphs on the same 
+plot(ttime,Iout);grid on;
+
+figure(2);
+title('PV Panel Terminal Voltage');
+subplot(2,1,2);%Plotting two graphs on the same 
+plot(ttime,VoltageOut);grid on;
+
+figure(2); %Figure 2 With PV terminal voltage and DCDC Current
+title('DC-DC Boost Converter Output Voltage');
+subplot(2,1,1);%Plotting two graphs on the same 
+plot(ttime,VVoltagePV);grid on;
+
+
+
+
+

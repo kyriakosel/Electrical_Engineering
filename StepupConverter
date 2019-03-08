@@ -1,0 +1,66 @@
+clc;clear;clear all;
+%------Variable Declaration---
+k=0.5; %k value can be changed between 0.45 and 0.75
+VI=15;
+Pomax=80;
+Fs = 5000;
+Co=333*10^(-6);
+L=8.22^(-3);
+rL=0.2;
+RL=15;
+%-----------------------------
+voltageOut=[];voltageOut(1)=0;% Storing values to two arrays
+inductorCurrent=[];inductorCurrent(1)=0;
+%-------Running Period--------
+Tp=1/Fs; %Period T
+onTime=k*Tp; %On state 
+simulationtime=200*Tp;% Full runtime of the simulation
+Dt=4*10^(-6); %sampling time
+ttime=0:Dt:simulationtime;%Difference of time sampling
+span=length(ttime);% Determining the duration
+%-----------------------------
+%------------Main Code--------
+for j=2:span
+    t_instant = mod(ttime, Tp);%modulus function will divide and take the 
+    %remainder, case it is 0 or 1, to determine the time position
+    
+    if (t_instant(j)<=onTime) %On and Off States
+        Switch=1;
+    else
+        Switch=0;
+    end
+    
+    %-----------Array A and Array B
+    Aarray=[-(rL/L) -(1-Switch)/L;(1-Switch)/Co -1/(RL*Co)]; 
+    Barray=[1/L;0];
+    
+    
+    %Runga Kutta Method
+    k1=Dt*(Aarray*[inductorCurrent(j-1);voltageOut(j-1)]+Barray*VI);
+    k2=Dt*(Aarray*([inductorCurrent(j-1);voltageOut(j-1)]+1/2*k1)+Barray*VI);
+    k3=Dt*(Aarray*([inductorCurrent(j-1);voltageOut(j-1)]+1/2*k2)+Barray*VI);
+    k4=Dt*(Aarray*([inductorCurrent(j-1);voltageOut(j-1)]+k3)+Barray*VI);
+
+    x=[inductorCurrent(j-1);voltageOut(j-1)]+(1/6)*(k1+2*k2+2*k3+k4);
+
+    
+    inductorCurrent(j)=x(1);
+    voltageOut(j)=x(2); %Storing Values
+end
+%-----------------------------------
+
+%-----------Plotting----------------
+figure(1);
+Iload=voltageOut/RL;
+plot(ttime,voltageOut),xlabel('Time'),ylabel('V-Out'); 
+grid on;
+
+figure(2);
+plot(ttime,Iload),xlabel('Time'),ylabel('L-Current');
+grid on;
+
+figure(3);
+plot(ttime,inductorCurrent),xlabel('Time'),ylabel('Current'); 
+grid on;
+%----------------------------------
+

@@ -1,0 +1,340 @@
+
+clc %Clear screen and memory
+clear all;
+format short
+ 
+%bus type codes 
+ 
+SLACK=1; %Giving values to the Slack bus, Pv and Pq
+PV=2; 
+PQ=3; 
+   
+%//////////////////Power System Parameters///////////////////////////////
+  
+ite_max=10000;     %Repetiotion number 
+error=1e-15;    %error tolerance 
+Sbase=100;      %base power in MVA 
+ 
+%//////// Legend for "buses" array /////////////////////////////////
+% [SLACK, V, d=0, 0, 0] for SLACK bus type (values in pu)
+% [PV, V, d(0), P, 0] for PV bus type (values in pu)
+% [PQ, V(0), d(0), P, Q] for PQ bus type (values in pu)      
+% V -> Voltage, V(0) -> Initial V, d -> angles, d(0) -> Initial d, 
+% P -> Specified P, Q -> Specified Q
+%/////////////////////////////////////////////////////////////////////
+ 
+%//Please define the 5 x 5 "buses" array below//////////////////////
+buses=[ [SLACK,1.06,0,0,0] ;            %bus 1   (North) SLACK
+        [PV,1.0,0,0.2,0] ;               %bus 2   (South) PV
+        [PQ,1,0,-0.6,-0.1] ;             %bus 3   (Elm)  
+        [PQ,1,0,-0.4,-0.05] ;            %bus 4   (Main)
+        [PQ,1,0,-0.45,-0.15] ] ;        %bus 5   (Lake)
+%/////////////////////////////////////////////////////////////////////
+ 
+%/////////// Legend for "lines" array /////////////////////////////////
+%[S_bus, R_bus, Y_line, Y_sh_line] (all values in pu)
+% S_bus -> sending bus Ne, R_bus -> receiving bus Ne,  
+% Y_line -> Admittance of the line (1 / (R + jX) )
+% Y_sh_line -> Admittance of the shunt (jB/2)
+%/////////////////////////////////////////////////////////////////////
+ 
+%//Please define the 7 x 4 "lines" array below//////////////////////
+lines=[ [1,2,1/(0.02+1i*0.06),1i*0.06/2];            %North-South line
+        [1,5,1/(0.08+1i*0.24),1i*0.05/2];            %North-Lake line
+        [2,5,1/(0.06+1i*0.18),1i*0.04/2];            %South-Lake line
+        [2,4,1/(0.06+1i*0.18),1i*0.04/2];            %South-Main line
+        [2,3,1/(0.04+1i*0.12),1i*0.03/2];           %South-Elm line
+        [5,4,1/(0.01+1i*0.03),1i*0.02/2];            %Lake-Main line
+        [4,3,1/(0.08+1i*0.24),1i*0.05/2];            %Main-Elm line
+                                        ]; 
+%/////////////////////////////////////////////////////////////////////
+ 
+N=size(buses,1); %number of Nes 
+lin=size(lines,1); %number of lines 
+ 
+%/////Building the power system admittance matrix ////////// 
+Y=zeros(N,N); 
+ 
+for i=1:lin             %Counting Loop
+    S=lines(i,1);           %sender end 
+    R=lines(i,2);           %receiver end 
+    y_line=lines(i,3);         %Series Admittance at current position (i)
+    y_sh_line=lines(i,4);      %Shunt Admittance at current position
+     
+    %////Assigning Y element at S-th row, R-th column and
+    %////and that at R-th row, S-th column. 
+    Y(S,R)=-y_line;     %Assigning Y element
+    Y(R,S)=-y_line;     %Assigning Y element
+    
+    %////Iteratively updating Y element at S-th row, S-th column and
+    %////and that at R-th row, R-th column. 
+    
+    Y(S,S)=Y(S,S)+y_line+y_sh_line; 
+    Y(R,R)=Y(R,R)+y_line+y_sh_line; 
+end 
+ 
+
+G=real(Y); %Real and Imaginary parts
+B=imag(Y); 
+  
+bus_type=buses(:,1); %SLACK =1, PV = 2 or PQ = 3
+ 
+%specified powers
+P=zeros(N,1);   %Real Power
+Q=zeros(N,1);   %Reactive Power
+  
+%calculated powers at initial stage
+Pn=zeros(N,1);  %Real Power at initial stage
+Qn=zeros(N,1);  %Reactive Power at initial stage
+ 
+%bus voltage magnitude and angle at initial stage
+Vn=buses(:,2);  %Voltage Magnitude
+dn=buses(:,3);  %Voltage Angle
+ 
+pq_num=0; %count number of PV and PQ buses 
+pv_num = 0; %PV Bus
+ 
+for i=1:N 
+         %Assigning the pre-specified powers and counting number of buses
+         %for different bus types
+    
+    switch bus_type(i) 
+        
+        case PV %Case statement choosing PV Bus
+        P(i)=buses(i,4);
+        pv_num=pv_num+1; 
+        
+        case PQ %Case statement choosing PQ Bus
+        P(i)=buses(i,4); 
+        Q(i)=buses(i,5); 
+        pq_num=pq_num+1; 
+        
+             
+    end; 
+     
+end 
+ 
+%/////Sizing of Jacobian sub-matrices/////
+%////dimension of J1n -> no. of del_Pn x no. of del_dn
+%////dimension of J2n -> no. of del_Pn x no. of del_Vn
+%////dimension of J3n -> no. of del_Qn x no. of del_dn
+%////dimension of J4n -> no. of del_Qn x no. of del_Vn 
+%///////////////////////////////////////// 
+ 
+%////////Initialisation of Jacobian sub-matrices///////
+%////////Please define the size of the sub-matrices ////
+%/////Legend: Jxn = zeros(No. of rows, No. of columns)
+J1n=zeros( 4, 4);  
+J2n=zeros( 4, 3); 
+J3n=zeros( 3, 4); 
+J4n=zeros( 3, 3); 
+%///////////////////////////////////////// 
+ 
+%/////Please define the size of the Correction and Mismatches matrices/////
+%/////Legend: Xn = zeros(No. of rows, No. of columns)
+Xn=zeros(7,1); %state variables at initial stage 
+Un=zeros(7,1); %mismatches-error matrix 
+A=zeros(7,7); %Jacobian matrix 
+invA=zeros(7,7); %The inverse of Jacobian matrix
+ 
+%//////////// Main body, start of iterations ////////////////////////// 
+ite = 0;        %iteration number
+converged=0;    %convergence flag is reset (i.e. convergence is not reached
+IX_U = 0;       %Row number of U matrix
+IX_X = 0;       %Row number of X matrix 
+IX_r = 0;       %Row number of Jacobian sub-matrix
+IX_c = 0;       %Column number of Jacobian sub-matrix
+temp=0;         %Temporary working variable
+
+
+
+
+
+
+while (ite < ite_max) && (~converged) 
+                %Do this loop until convergence is set 
+                %or maximum number of iteration is reached
+ite = ite + 1;  
+IX_U = 0;
+IX_X = 0;% IX=INDEX X=CORECCTION X
+
+%////Calculating mismatches and correction matrices at ite-th iteration////
+%////Enter your codes here///////
+ for i=2:N %//P 
+     temp=0;
+     for n=1:N
+         temp=temp+Vn(i)*Vn(n)*(G(i,n)*cos(dn(i)-dn(n))+B(i,n)*sin(dn(i)-dn(n)));
+     end
+     Pn(i)=temp;
+     IX_U=IX_U+1;
+     IX_X=IX_X+1;
+     
+     Un(IX_U)=P(i)-Pn(i);
+     Xn(IX_X)=dn(i);
+ end
+ %Q Calculation
+ for i=3:N
+     temp=0;
+     for n=1:N
+         temp=temp-Vn(i)*Vn(n)*(B(i,n)*cos(dn(i)-dn(n))-G(i,n)*sin(dn(i)-dn(n)));
+     end
+     Qn(i)=temp;
+      IX_U=IX_U+1;
+     IX_X=IX_X+1;
+     
+     Un(IX_U)=Q(i)-Qn(i);
+     Xn(IX_X)=Vn(i);
+ end
+ 
+%//////////////////////////////////////////////////////////////////////////
+ 
+ 
+%//////////////Updating the Jacobian sub-matrices//////////////////////////
+% for J11------------------------------------------------------
+IX_r = 0; %Row  
+IX_c = 0; %Column
+for i = 2:N %Row                    
+   IX_r = IX_r + 1;
+   for j =2:N   %Column 
+        if i~=j
+            IX_c = IX_c + 1;
+            J1n(IX_r,IX_c)=Vn(i)*Vn(j)*( G(i,j)*sin(dn(i)-dn(j))-B(i,j)*cos(dn(i)-dn(j)) );    
+        else
+            IX_c = IX_c + 1;
+            J1n(IX_r,IX_c)=-Qn(i)-Vn(i)^2*B(i,i); 
+        end 
+   end
+    IX_c = 0;
+end
+%for j12 -------------------------------------------------------
+IX_r = 0; %Row  
+IX_c = 0; %Column
+for i = 2:N %Row                    
+   IX_r = IX_r + 1;
+   for j =3:N   %Column 
+        if i~=j
+            IX_c = IX_c + 1;
+            J2n(IX_r,IX_c)=Vn(i)*( G(i,j)*cos(dn(i)-dn(j))+B(i,j)*cos(dn(i)-dn(j)) );    
+        else
+            IX_c = IX_c + 1;
+            J2n(IX_r,IX_c)=Pn(i)/Vn(i)+Vn(i)*G(i,i); 
+        end 
+   end
+    IX_c = 0;
+end
+ %for j21 -------------------------------------------------
+IX_r = 0; %Row  
+IX_c = 0; %Column
+for i = 3:N %Row                    
+   IX_r = IX_r + 1;
+   for j =2:N   %Column 
+        if i~=j
+            IX_c = IX_c + 1;
+            J3n(IX_r,IX_c)=-Vn(i)*Vn(j)*( B(i,j)*sin(dn(i)-dn(j))+G(i,j)*cos(dn(i)-dn(j)) );    
+        else
+            IX_c = IX_c + 1;
+            J3n(IX_r,IX_c)=Pn(i)-(Vn(i)^2)*G(i,i); 
+        end 
+   end
+    IX_c = 0;
+end
+%for j22 -------------------------------------------------
+IX_r = 0; %Row  
+IX_c = 0; %Column
+for i = 3:N %Row                    
+   IX_r = IX_r + 1;
+   for j =3:N   %Column 
+        if i~=j
+            IX_c = IX_c + 1;
+            J4n(IX_r,IX_c)=-Vn(i)*( B(i,j)*cos(dn(i)-dn(j))-G(i,j)*sin(dn(i)-dn(j)) );    
+        else
+            IX_c = IX_c + 1;
+            J4n(IX_r,IX_c)=Qn(i)/Vn(i)-Vn(i)*B(i,i); 
+        end 
+   end
+    IX_c = 0;
+end
+%//////////////////////////////////////////////////////////////////////////
+ 
+ 
+%//////////////Updating the Jacobian matrix//////////////////////////
+A=[ [J1n,J2n] ; [J3n,J4n] ]; 
+ 
+%////////////Updating Correction matrix///////////////////////// 
+Xn= Xn + A \ Un;
+ 
+%/////////////////////////////////////////////////////////////////////////
+ 
+%/////////Checking for convergence///////////////////////////////////////
+    for i=1:N
+        if abs(Un(i))>error 
+            converged=0; 
+        else
+            converged = 1;
+        end 
+    end 
+ %/////////////////////////////////////////////////////////////////////////   
+    
+%////////////Updating voltage magnitudes and angles/////////////////////// 
+    IX_X = 0;
+    for i=2:N 
+         IX_X = IX_X + 1;
+         dn(i)=Xn(IX_X); 
+    end 
+ 
+    for i=2+pv_num:N
+        IX_X = IX_X + 1;
+        Vn(i)=Xn(IX_X); 
+    end 
+ %/////////////////////////////////////////////////////////////////////////
+ 
+end
+ 
+%////////////////////Printing the results  ////////////////////////////////
+%///////Please analyse the following codes and enter your own comments////
+fprintf('%i iterations\n',ite); 
+fprintf('Bus\t Voltage(pu)\t angle(degrees)\n'); 
+ 
+for i=1:N 
+    fprintf('%i\t\t %8.5f \t\t %8.5f \n', i, Vn(i), dn(i)*180/pi); 
+end 
+ 
+PL=0;           %Initialising active power loss
+QL=0;           %Initialising reactive power loss
+ 
+fprintf('Branch\t P(MW)\t\t\t Q(MVAr)\t\t Plosses(MW)\t Qlosses(MVAr)\n'); 
+fprintf('Line power flows\n'); 
+% Printing Data--------------------------------------
+for i=1:lin 
+    
+    S=lines(i,1); 
+    R=lines(i,2); 
+    y_line=lines(i,3); 
+    y_shunt = lines(i,4);
+    
+    Vs=Vn(S)*exp(1i*dn(S)); 
+    Vr=Vn(R)*exp(1i*dn(R));     
+    
+    Isr=y_line*(Vs-Vr)+Vs*y_shunt;
+    Ssr=Vs*conj(Isr); 
+    Psr=real(Ssr); 
+    Qsr=imag(Ssr);
+    
+    I_line=y_line*(Vs-Vr);         
+    Irs = -(I_line-Vr*y_shunt);    
+    Srs=Vr*conj(Irs); 
+    Prs=real(Srs); 
+    Qrs=imag(Srs);
+           
+
+
+    Slosses=Ssr+Srs; 
+    Plosses=real(Slosses); 
+    Qlosses=imag(Slosses); 
+    fprintf('%i -> %i \t %8.5f \t\t %8.5f \n', S, R, Psr*Sbase, Qsr*Sbase); 
+    fprintf('%i -> %i \t %8.5f \t\t %8.5f \t\t %8.5f \t\t %8.5f \n', ... 
+R, S, Prs*Sbase, Qrs*Sbase, Plosses*Sbase, Qlosses*Sbase); 
+     
+    PL=PL+Plosses; 
+    QL=QL+Qlosses;     
+end 

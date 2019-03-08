@@ -1,0 +1,84 @@
+
+function [sys,x0,str,ts] = abc_to_qd(t,x,u,flag)
+
+%*******Main Body for S-function******
+switch flag,	% Determine the tasks to be done for specific flag   
+			
+		% Initialising is done to define the structure information
+case 0                      
+[sys,x0,str,ts] = mdlInitializeSizes;  
+
+case 2		% Value is updated for the next sample
+sys = mdlUpdate(t,x,u);
+
+case 3           % Determining the output value       
+sys = mdlOutputs(t,x,u);
+
+case {1,4,9}  	% Continuous states are not used
+			% Variable sample sizes are not used
+			% Emergency termination is not used
+     sys = [];               
+
+otherwise   
+error (['Unhandled flag = ', num2str(flag)]); %Error handling
+end;
+
+%*****end of main body*****************
+%*****mdlInitializeSizes subroutine*****
+
+function [sys,x0,str,ts]= mdlInitializeSizes;
+%Call simsizes for a size structure, define it before converting it 
+%to the array sys.
+
+sizes = simsizes; 
+sizes.NumContStates = 0;    
+sizes.NumDiscStates = 2;    
+sizes.NumOutputs =2;        
+sizes.NumInputs = 5;        
+sizes.DirFeedthrough =1;    
+sizes.NumSampleTimes = 1;   
+
+sys = simsizes(sizes);      
+x0 = 0;                     
+str = [];                   
+ts = [1e-4 0];                
+%*****end of initialization stage*******
+%*****mdlUpdate subroutine*****
+
+function sys = mdlUpdate(t,x,u)
+	%next sample is updated through another subroutine
+
+sys = compute(u(1),u(2),u(3),u(4),u(5));
+
+%*****end of sampling update*****
+%****mdlOutputs subroutine*******
+
+function sys = mdlOutputs(t,x,u)
+	%the current discrete state is made available in output
+
+sys = x;
+%*****end of sampling update*****
+
+%******compute subroutine**********
+%****(Enter your own code)*********
+
+function output = compute(fa,fb,fc,sin_theta,cos_theta)
+
+%u(1) = fa;
+%u(2) = fb;
+%u(3) = fc;
+%u(4) = sin(theta);
+%u(5) = cos(theta);
+
+ f_alpha = fa-fb*(1/2)-fc*(1/2);
+ f_beta = -fb*(sqrt(3)/2)+fc*(sqrt(3)/2);
+ 
+ f_q = cos_theta*f_alpha-sin_theta*f_beta;
+ f_d = sin_theta*f_alpha+cos_theta*f_beta;
+ K = 2/3;
+ output = [K*f_q K*f_d];
+
+
+
+
+%*****end of computation**********

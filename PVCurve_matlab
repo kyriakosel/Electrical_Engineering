@@ -1,0 +1,107 @@
+
+clear;
+clc;
+%declaring all the constants
+Ai=1.72;
+constantk=1.380658*10^(-23);
+Ior=19.9693*10^(-6);
+np=2;
+ns=40;
+Tr=301.18;
+q=1.6*10^(-19);
+eg=1.1;
+Iscr=3.3;
+ki=1.7*10^(-3);
+Rs=5*10^(-5);
+Rp=5*10^5;
+%Create arrays for maximum values
+mpp=[];
+powermax=[0 0 0;0 0 0; 0 0 0];
+voltagemax=[0 0 0;0 0 0; 0 0 0];
+currentmax=[0 0 0;0 0 0; 0 0 0];
+%___________________________
+%________Main program_______
+%Cycle from i to 3
+for n=1:1:3
+
+ %input statement
+ Temperature=input('Enter the temperature Ta : ' );
+ Power=input('Enter the light intensity G: ' );
+
+ %Initializing variable values
+ Vz=0;
+ Ic=1000;
+ dy=1;
+ ICurrentPV=[];
+ VVoltagePV=[];
+
+ %Find the following equations
+ Temp=Temperature+(0.2*Power)+273.18;% Cell surface temp
+ Is=Ior*(Temp/Tr)^3*exp(q*eg*(1/Tr-1/Temp)/(constantk*Ai));%Diode leakage I
+ Isc=(Iscr+ki*(Temp-Tr))*Power;%Short circuit current
+ %Only positive values for current
+ while Ic>0.00001
+
+ %Work the newtons method only while dy is higher than 0
+ while abs(dy)>0.01
+
+ %Algorithm for Newton-Raphson method
+ fx=Ic-np*Isc+np*Is*(exp((q*(Vz/ns+Ic*Rs/np))/(Ai*constantk*Temp)-
+1))+(Vz*np/ns+Ic*Rs)/Rp;
+
+dfx=1+Rs/Rp+q*Is*Rs/(Ai*constantk*Temp)*exp((q*(Vz/ns+Ic*Rs/np))/(Ai*constantk*Temp));
+ dy=fx/dfx;
+ Ic=Ic-dy;
+
+ end
+
+ %Initializing tolerance value
+ dy = 10;
+
+ %Filling arrays with I and V values
+ ICurrentPV=[ICurrentPV Ic];
+ VVoltagePV=[VVoltagePV Vz];
+
+ %Setting next value of V
+ Vz=Vz+0.01;
+
+ end
+
+ %Calculate P
+ mpp=VVoltagePV.*ICurrentPV;
+
+ %Find max P
+ p=size(mpp,2);
+ for i=1:1:p
+ if (mpp(i)>powermax(1,n))
+ powermax(1,n)=mpp(i);
+ voltagemax(1,n)=VVoltagePV(i);
+ currentmax(1,n)=ICurrentPV(i);
+ end
+ end
+ if n==1
+%___________________
+%Show the Maximum Power point on the graph with label
+plot(VVoltagePV,mpp,'y',voltagemax(1,1),powermax(1,1),'or');
+text(voltagemax(1,1), powermax(1,1), ['power',num2str(powermax(1,1)),' voltage',
+num2str(voltagemax(1,1))]);
+hold on;
+ else if n==2
+%___________________
+ %Show the Maximum Power point on the graph with label
+ plot(VVoltagePV,mpp,'m',voltagemax(1,2),powermax(1,2));
+ text(voltagemax(1,2), powermax(1,2), ['Power: ', num2str(powermax(1,2)),' voltage:
+' num2str(voltagemax(1,2))]);
+else if n==3
+%___________________
+%Show the Maximum Power point on the graph with label
+plot(VVoltagePV,mpp,'k',voltagemax(1,3),powermax(1,3),'ob');
+text(voltagemax(1,3), powermax(1,3), ['Power: ', num2str(powermax(1,3)),' voltage: '
+num2str(voltagemax(1,3))]);
+
+ xlabel('V-Voltage');
+ ylabel('P-Power');
+ end
+ end
+ end
+end

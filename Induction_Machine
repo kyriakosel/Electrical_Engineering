@@ -1,0 +1,193 @@
+%******Induction Machine Simulation Program ******* 
+% 
+%  		University of Leeds 
+% Module: Electricity Generation by Renewable Sources 
+% 
+%*************************************************************** 
+% This is a skeleton program for Induction Machine simulation
+
+J=0.025284;
+B=0.005;
+HP=5*746.15;
+p=4;
+Vi=230;
+Vph=230/sqrt(3);
+f=50;
+Rs=0.5673;
+Rr=0.7091;
+Lss=0.00301;
+Lrr=0.00301;
+Lm=0.075239;
+Ls=Lss+Lm;
+Lr=Lrr+Lm;
+ws=2*pi*50;
+h=0.0002;
+
+% Initial conditions for all variables have set up already
+    	
+wr_present = 0; 	    % Present sample rotor speed (rad/second)
+wr_next = 0;          % Next sample Rotor Speed (rad/sec) 
+Torque_E = 0; 	     % Present sample electromagnetic torque(Nm)
+Torque_L=-1;
+Vdqs_present = [0 0]; % present sample Vdq stator (V) 
+Vdqr_present = [0 0]; % present sample Vdq rotor (V)
+
+Idqs_present = [0 0]; %present sample Idq stator initialisation 
+Idqr_present = [0 0]; % present sample Idq rotor initialisation 
+
+Idqs_next = [0 0];    %Next Sample Idq stator 
+Idqr_next = [0 0];    %Next Sample Idq rotor 
+
+LMdqs_present = [0 0]; % present sample stator Flux linkage 
+LMdqr_present = [0 0]; % present sample rotor Flux linkage 
+ 
+LMdqs_next = [0 0]; 	%Next sample stator Flux linkage    
+LMdqr_next = [0 0]; 	%Next sample rotor Flux linkage 
+
+V_abc = [0;0;0];		%Grid-side Three-phase voltages
+V_dqs = [0;0;0];		%Machine stator-side voltages in d-q form, 
+% they are zero when machine is not  
+	% connected to grid
+
+% K1X-K4X Temporary matrices to store variable in the order below
+%Change in Rotor speed
+%Change in d-comp of stator flux linkage
+%Change in q-comp of stator flux linkage
+%Change in d-comp of rotor flux linkage
+%Change in q-comp of rotor flux linkage
+K1X = [0 0 0 0 0];
+K2X = [0 0 0 0 0];
+K3X = [0 0 0 0 0];
+K4X = [0 0 0 0 0];
+
+%Todo: Set Clarke transformation matrix
+Clarke=2/3*[1 -0.5 -0.5;0 (sqrt(3))/2 -(sqrt(3))/2];
+
+for t=0:h:1
+%*****simulation loop starts from t=0 ******
+%      (you may use For-loop or While-loop
+%Todo: set grid three-phase voltages, for example 
+%V_abc = [ V_Line*(sqrt(2)/sqrt(3))*cos(ws*t)…..;
+%and update them every sample 
+%	
+
+V_abc = [ V_Line*(sqrt(2)/sqrt(3))*cos(ws*t);V_line*(sqrt(2)/sqrt(3))*cos(ws*t+2*pi/3);V_line*(sqrt(2)/sqrt(3))*cos(ws*t-2*pi/3)];
+
+%Todo: Convert grid three-phase voltages to equivalent d-q elements   
+%   using Clarke transformation matrix, V_dqs=
+% Note: this should only be implemented when grid connection  
+%  is applied 
+Vdqs= Clarke*V_abc;
+
+ %********Updating stator and rotor Currents, flux linkages and rotor   
+ % elec speed, for example:  Idqs_present = Idqs_next ********** 
+Idqs_present = Idqs_next;
+Idqr_present=Idqr_next;
+LMdqs_present=LMdqs_next;
+wr_present=wr_next;
+LMdqr_present=LMdqr_next;
+
+ %*****Runge Kutta iteration starts********* 
+
+var_X = [wr_present LMdqs_present LMdqr_present]; 
+
+%***** K1X Calculation********** 
+%Update of sub-step working variable
+temp_X = var_X; 
+
+% TODO: write one line of code to call Function code (given to you 
+%    in Appendix 2) to calculate K1 for all 5 state variables. 
+% Example : [K1X(1) K1X(2) K1X(3) K1X(4) K1X(5)] = ... 
+% compute_K_steps(poles, h, torqueE, torqueL, B, J, Vdqs_present,... 
+% Vdqr_present, Idqs_present, Idqr_present, Rs, Rr, temp_X); 
+[K1X(1), K1X(2), K1X(3), K1X(4), K1X(5)] =compute_K_steps(poles, h, torque_E, torque_L, B, J, Vdqs_present,Vdqr_present, Idqs_present, Idqr_present, Rs, Rr, temp_X); 
+
+
+% TODO: write two line of code to call Function code (given to you) to  
+%   calculate K2 for all 5 state variables. 
+% must remember to Update the sub-step working variable temp_X 
+
+temp_X = var_X+1/2*K1X; 
+[K2X(1), K2X(2), K2X(3), K2X(4), K2X(5)] =compute_K_steps(poles, h, torque_E, torque_L, B, J, Vdqs_present,Vdqr_present, Idqs_present, Idqr_present, Rs, Rr, temp_X); 
+
+
+% TODO: write two line of code to call Function code (given to you) to calculate K3 for all 5 state variables. 
+% must remember to Update the sub-step working variable temp_X 
+ 
+
+
+% TODO: write two line of code to call Function code (given to you) to calculate K4 for all 5 state variables. 
+% must remember to Update the sub-step working variable temp_X 
+
+temp_X = var_X+K3X; 
+
+ 
+%TODO: write code for updating Rotor speed wr, 
+% Stator Fluxlinkage LMdqs, 
+% Rotor Fluxlinkage LMdqr.
+% For 
+% example:LMdqs_next(1)=var_X(2)+(K1X(2)+2*(K2X(2)+K3X(2))+K4X(2))/6; 
+
+
+
+
+%TODO : writ code to calculate rotor and stator current Idqs, Idqr. 
+% according to equation Ids = A*(Lr*LMds - Lm*LMdr); 
+
+
+
+
+%TODO: writ code for calculate electromagnetic Torque Te according 
+%Te= 2/3(p/2)Lm(Iqs*Idr-Ids*Iqr)
+
+
+%************ Updating display data *************** 
+
+end
+% ************ loop ends, go to next sample t + ?t ************ 
+
+ A skeleton function for evaluating stator and roto d-q flux linkages and machine speed. 
+
+function [KX1,KX2,KX3,KX4,KX5] = compute_K(poles, h, torqueE, torqueL, B, J, Vdqs_present, Vdqr_present, Idqs_present, Idqr_present, Rs, Rr, temp_X);
+ 
+%ToDo: write the code to Update the change of rotor speed d_wr; 
+ KX1 = 
+ 
+ % Update the d-component change of flux linkage at stator
+ KX2 = h*(Vdqs_present(1) - Rs*Idqs_present(1)); 
+ 
+ %ToDo: write the code to Update the q-component change of flux linkage at stator
+ KX3 = 
+ 
+%ToDo: write the code to Update the d-component change of flux linkage at rotor 
+ KX4 = 
+ 
+% ToDo: write the code to Update the q-component change of flux linkage at rotor
+
+KX5 = h*(Vdqr_present(2) - Rr*Idqr_present(2) + (temp_X(1))...
+     *temp_X(4)); 
+
+Definition of Variables in the above function:
+Vdqs_present: array for stator voltage vector 
+Element_1 = d-comp 
+Element_2 = q-comp
+Vdqr_present:array for rotor voltage vector
+Element_1 = d-comp 
+Element_2 = q-comp
+
+Idqs_present : array for stator current vector 
+Element_1 = d-comp 
+Element_2 = q-comp
+
+Idqr_present : array for rotor current vector
+Element_1 = d-comp 
+Element_2 = q-comp
+
+Rs, Rr: stator and rotor winding resistances.
+w_ref: synchronous angular frequency. 
+temp_X[]: temporary array for working variables at each sub-step
+            %Element_1 = present electrical speed for rotor
+            %Element_2 = d-comp for stator flux linkage
+            %Element_3 = q-comp for stator flux linkage
+            %Element_4 = d-comp for rotor flux linkage
+            %Element_5 = q-comp for rotor flux linkage 
